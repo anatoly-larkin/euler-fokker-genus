@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Euler-Fokker Genus Explorer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,600&family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #e4e8e3;
+    --card: #fbfcf8;
+    --ink: #1e2a2b;
+    --muted: #5d6b6a;
+    --line: #c9d0ca;
+    --brass: #9a6a12;
+    --active: #1f5e5b;
+    --active-ink: #f4f7f2;
+    --error: #a3271b;
+    --error-bg: #f8e4df;
+    --serif: "Newsreader", "Iowan Old Style", Georgia, serif;
+    --sans: "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #162022; --card: #1f2b2d; --ink: #e3e8e2; --muted: #9aa8a5;
+      --line: #344446; --brass: #d7a646; --active: #3a8f89; --active-ink: #0f1a1b;
+      --error: #ff9b8a; --error-bg: #3a2220;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #162022; --card: #1f2b2d; --ink: #e3e8e2; --muted: #9aa8a5;
+    --line: #344446; --brass: #d7a646; --active: #3a8f89; --active-ink: #0f1a1b;
+    --error: #ff9b8a; --error-bg: #3a2220;
+  }
+  *, *::before, *::after { box-sizing: inherit; }
+  html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: var(--sans); font-size: 16px; line-height: 1.5;
+  }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
+
+  header h1 {
+    font-family: var(--serif); font-weight: 600;
+    font-size: clamp(1.9rem, 5vw, 2.8rem); line-height: 1.1; margin: 0 0 .4rem;
+    letter-spacing: -0.01em;
+  }
+  header p { margin: 0 0 1.6rem; color: var(--muted); max-width: 62ch; }
+
+  .controls {
+    display: flex; flex-wrap: wrap; gap: 1rem 1.5rem; align-items: flex-end;
+    padding: 1.1rem 1.2rem; background: var(--card);
+    border: 1px solid var(--line); border-radius: 10px;
+  }
+  .field { display: flex; flex-direction: column; gap: .3rem; }
+  .field label { font-size: .9rem; font-weight: 700; }
+  .field small { color: var(--muted); font-size: .8rem; }
+  .genus-row { display: flex; gap: .5rem; }
+  input[type="text"], input[type="number"] {
+    font: 1.15rem var(--serif); color: var(--ink); background: var(--bg);
+    border: 1px solid var(--line); border-radius: 6px; padding: .45rem .7rem;
+  }
+  #genusInput { width: min(16rem, 52vw); }
+  #refHz { width: 7rem; }
+  input:focus-visible, button:focus-visible {
+    outline: 3px solid var(--brass); outline-offset: 2px;
+  }
+  .btn {
+    font: 700 .95rem var(--sans); cursor: pointer; border-radius: 6px;
+    padding: .5rem 1rem; border: 1px solid var(--ink);
+    background: var(--ink); color: var(--card);
+  }
+  .btn.ghost { background: transparent; color: var(--ink); border-color: var(--line); }
+  .btn.ghost:hover { border-color: var(--ink); }
+
+  .message {
+    margin: .9rem 0 0; padding: .6rem .9rem; border-radius: 6px;
+    background: var(--error-bg); color: var(--error); font-weight: 700;
+  }
+  .message[hidden] { display: none; }
+
+  .stage { display: grid; grid-template-columns: 1fr auto; gap: 1.25rem; margin-top: 1.5rem; align-items: start; }
+
+  .summary { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: .5rem; margin-bottom: .6rem; }
+  .summary h2 { font-family: var(--serif); font-weight: 400; font-size: 1.25rem; margin: 0; }
+  .summary span { color: var(--muted); font-size: .9rem; }
+
+  .rows { display: flex; flex-direction: column; gap: .5rem; }
+  .row {
+    display: flex; flex-wrap: wrap; align-items: center; gap: .6rem 1rem;
+    background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+    padding: .45rem .8rem .45rem .45rem;
+  }
+  .tone {
+    flex: 0 0 13.5rem; text-align: left; cursor: pointer;
+    background: var(--bg); color: var(--ink);
+    border: 1px solid var(--line); border-radius: 7px;
+    padding: .55rem .8rem; display: flex; flex-direction: column; gap: .05rem;
+    transition: background .15s, color .15s, border-color .15s;
+  }
+  .tone:hover { border-color: var(--ink); }
+  .tone .ratio { font-family: var(--serif); font-size: 1.2rem; font-variant-numeric: tabular-nums; }
+  .tone .factors { font-size: .78rem; color: var(--muted); }
+  .tone[aria-pressed="true"] { background: var(--active); color: var(--active-ink); border-color: var(--active); }
+  .tone[aria-pressed="true"] .factors { color: var(--active-ink); opacity: .8; }
+
+  .staff { flex: 0 0 auto; color: var(--ink); line-height: 0; }
+  .staff svg { display: block; }
+
+  .hz { display: flex; flex-direction: column; min-width: 6rem; }
+  .hz .val { font-family: var(--serif); font-size: 1.35rem; font-variant-numeric: tabular-nums; }
+  .hz .val small { font-family: var(--sans); font-size: .8rem; color: var(--muted); margin-left: .2rem; }
+  .hz .note { font-size: .82rem; color: var(--muted); }
+
+  /* Volume fader */
+  .mixer {
+    position: sticky; top: calc(env(safe-area-inset-top, 0px) + 1rem);
+    display: flex; flex-direction: column; align-items: center; gap: .6rem;
+    background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+    padding: 1rem .7rem; width: 5.5rem;
+  }
+  .mixer label { font-size: .85rem; font-weight: 700; }
+  .mixer output { font-family: var(--serif); font-size: 1.1rem; font-variant-numeric: tabular-nums; }
+  #volume {
+    writing-mode: vertical-lr; direction: rtl;
+    width: 2rem; height: 14rem; margin: 0; accent-color: var(--brass); cursor: pointer;
+  }
+  .mixer .count { font-size: .78rem; color: var(--muted); text-align: center; }
+  .mixer .btn { padding: .4rem .5rem; font-size: .8rem; width: 100%; }
+
+  .empty { padding: 2rem 1rem; text-align: center; color: var(--muted); }
+
+  @media (max-width: 620px) {
+    .wrap { padding: 1.25rem .8rem 3rem; }
+    .stage { gap: .6rem; }
+    .tone { flex: 1 1 100%; }
+    .mixer { width: 4.2rem; padding: .8rem .35rem; }
+    #volume { height: 11rem; }
+  }
+  @media (prefers-reduced-motion: reduce) { .tone { transition: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Euler-Fokker genus explorer</h1>
+    <p>Enter odd generators separated by commas. Every product of the generators is folded into one octave and laid out as a playable tone, with its nearest equal-tempered pitch and cent deviation.</p>
+  </header>
+
+  <section class="controls" aria-label="Genus settings">
+    <div class="field">
+      <label for="genusInput">Genus generators</label>
+      <div class="genus-row">
+        <input id="genusInput" type="text" value="3,5,7" placeholder="e.g. 3,5,7" autocomplete="off" spellcheck="false">
+        <button class="btn" id="submitBtn" type="button">Submit</button>
+      </div>
+      <small>Odd whole numbers only; repeat or use 3^11 for powers</small>
+    </div>
+    <div class="field">
+      <label for="refHz">Reference Hz</label>
+      <input id="refHz" type="number" value="440" min="20" max="1000" step="any">
+      <small>20 to 1000</small>
+    </div>
+  </section>
+  <p class="message" id="message" role="alert" hidden></p>
+
+  <div class="stage">
+    <section>
+      <div class="summary">
+        <h2 id="genusTitle"></h2>
+        <span id="genusCount"></span>
+      </div>
+      <div class="rows" id="rows"></div>
+    </section>
+
+    <aside class="mixer" aria-label="Volume">
+      <label for="volume">Volume</label>
+      <input id="volume" type="range" min="0" max="100" value="50" aria-orientation="vertical">
+      <output id="volOut" for="volume">50</output>
+      <div class="count" id="activeCount">0 playing</div>
+      <button class="btn ghost" id="stopAll" type="button">Stop all</button>
+    </aside>
+  </div>
+</div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const genusInput = $('genusInput'), refInput = $('refHz'), msg = $('message');
+  const rowsEl = $('rows'), volume = $('volume'), volOut = $('volOut');
+
+  let ratios = [];         // current genus tones
+  let refHz = 440;
+  let audioCtx = null, master = null;
+  const voices = new Map(); // key -> { osc, gain }
+
+  // ---------- Messages ----------
+  function showMessage(text) { msg.textContent = text; msg.hidden = false; }
+  function clearMessage() { msg.hidden = true; msg.textContent = ''; }
+
+  // ---------- Parsing ----------
+  function parseGenus(text) {
+    const parts = text.split(',').map(s => s.trim()).filter(Boolean);
+    if (!parts.length) return { error: 'Enter at least one odd number, for example 3,5,7.' };
+    const counts = new Map(), evens = [], bad = [];
+    for (const p of parts) {
+      const m = p.match(/^(\d+)\s*(?:\^\s*(\d+))?$/);   // "3" or "3^11"
+      if (!m) { bad.push(p); continue; }
+      const n = parseInt(m[1], 10);
+      const e = m[2] === undefined ? 1 : parseInt(m[2], 10);
+      if (n % 2 === 0) { evens.push(n); continue; }
+      if (n === 1 || e === 0) continue;               // 1 adds nothing new
+      counts.set(n, (counts.get(n) || 0) + e);
+    }
+    if (evens.length) return { error: `Only odd numbers are allowed. Remove the even number${evens.length > 1 ? 's' : ''}: ${evens.join(', ')}.` };
+    if (bad.length) return { error: `"${bad.join('", "')}" is not valid. Use odd whole numbers separated by commas, optionally with an exponent like 3^11.` };
+
+    const gens = [...counts.entries()].sort((a, b) => a[0] - b[0]);
+    const toneCount = gens.reduce((t, [, e]) => t * (e + 1), 1);
+    if (toneCount > 2048) return { error: `That genus would produce ${toneCount.toLocaleString()} tones. Keep it to 2,048 or fewer.` };
+    const largest = gens.reduce((t, [g, e]) => t * Math.pow(g, e), 1);
+    if (!Number.isSafeInteger(largest)) return { error: 'The largest product in this genus is too big to calculate exactly. Use fewer or smaller generators.' };
+    return { gens };
+  }
+
+  const SUP = { 0:'⁰',1:'¹',2:'²',3:'³',4:'⁴',5:'⁵',6:'⁶',7:'⁷',8:'⁸',9:'⁹' };
+  const pow = (g, e) => e === 1 ? String(g) : g + String(e).split('').map(d => SUP[d]).join('');
+
+  // ---------- Genus construction ----------
+  // gens: [[generator, exponent], ...]; every combination of exponents 0..e
+  function buildGenus(gens) {
+    const map = new Map();
+    const walk = (i, p, f) => {
+      if (i === gens.length) {
+        let den = 1;
+        while (p / den >= 2) den *= 2;
+        const key = p + '/' + den;
+        if (!map.has(key)) map.set(key, { key, num: p, den, value: p / den, factors: f });
+        return;
+      }
+      const [g, e] = gens[i];
+      let q = p;
+      for (let k = 0; k <= e; k++) {
+        walk(i + 1, q, k ? [...f, [g, k]] : f);
+        q *= g;
+      }
+    };
+    walk(0, 1, []);
+    const list = [...map.values()].sort((a, b) => a.value - b.value);
+    list.push({ key: '2/1', num: 2, den: 1, value: 2, factors: [], octave: true });
+    return list;
+  }
+
+  const trimNum = (x, d) => String(Number(x.toFixed(d)));
+
+  function ratioLabel(r) {
+    if (r.value === 1) return '1';
+    if (r.octave) return '2';
+    return `${trimNum(r.value, 6)} (${r.num}:${r.den})`;
+  }
+  function factorLabel(r) {
+    if (r.octave) return 'octave';
+    if (r.value === 1) return 'unison';
+    if (r.factors.length === 1 && r.factors[0][1] === 1) return String(r.num);
+    return `${r.factors.map(([g, e]) => pow(g, e)).join('×')} = ${r.num}`;
+  }
+
+  // ---------- Pitch analysis (12-TET, A4 = 440) ----------
+  const NAMES = ['C','C♯','D','D♯','E','F','F♯','G','G♯','A','A♯','B'];
+  const LETTER = [0,0,1,1,2,3,3,4,4,5,5,6];
+  function noteInfo(f) {
+    const m = 69 + 12 * Math.log2(f / 440);
+    const near = Math.round(m);
+    const cents = Math.trunc((m - near) * 100); // truncated toward zero
+    const pc = ((near % 12) + 12) % 12;
+    const octave = Math.floor(near / 12) - 1;
+    return { midi: near, pc, octave, letter: LETTER[pc], sharp: NAMES[pc].length > 1, name: NAMES[pc] + octave, cents };
+  }
+  const centsText = c => c === 0 ? '' : (c > 0 ? '+' + c : '−' + Math.abs(c));
+
+  // ---------- Staff drawing ----------
+  function trebleClef(T) {
+    const y = d => (T + d).toFixed(1);
+    return `<path d="M21 ${y(27)} C15 ${y(27)} 15 ${y(19)} 21 ${y(19)} C29 ${y(19)} 29 ${y(31)} 20 ${y(31)}
+      C10 ${y(31)} 9 ${y(19)} 16 ${y(13)} L24 ${y(4)} C28 ${y(-1)} 27 ${y(-10)} 23 ${y(-10)}
+      C19 ${y(-10)} 18 ${y(-2)} 19 ${y(4)} L22 ${y(40)} C22.5 ${y(45)} 17 ${y(46)} 16 ${y(42)}"
+      fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="17.3" cy="${y(41.5)}" r="2.2" fill="currentColor"/>`;
+  }
+  function bassClef(T) {
+    const y = d => (T + d).toFixed(1);
+    return `<circle cx="13" cy="${y(8)}" r="3.4" fill="currentColor"/>
+      <path d="M11 ${y(7)} C11 ${y(-1)} 28 ${y(-2)} 28 ${y(9)} C28 ${y(19)} 20 ${y(26)} 9 ${y(31)}"
+      fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>
+      <circle cx="33" cy="${y(4)}" r="1.6" fill="currentColor"/>
+      <circle cx="33" cy="${y(12)}" r="1.6" fill="currentColor"/>`;
+  }
+
+  function staffSVG(info) {
+    const s = 8, W = 124, H = 124, T = 46, half = s / 2;
+    const clef = info.midi >= 60 ? 'treble' : 'bass';
+    let step = info.octave * 7 + info.letter;   // diatonic step number (C0 = 0)
+    let shift = 0;                               // octave transposition sign
+    if (clef === 'treble') { while (step > 47) { step -= 7; shift++; } }
+    else { while (step < 10) { step += 7; shift--; } }
+
+    const bottomStep = clef === 'treble' ? 30 : 18;   // E4 or G2 on bottom line
+    const topStep = bottomStep + 8;
+    const bottomY = T + 4 * s;
+    const yOf = st => bottomY - (st - bottomStep) * half;
+    const ny = yOf(step);
+    const nx = 66;
+
+    let g = '';
+    for (let i = 0; i < 5; i++) g += `<line x1="3" x2="${W - 3}" y1="${T + i * s}" y2="${T + i * s}" stroke="currentColor" stroke-width="1" opacity=".75"/>`;
+    g += clef === 'treble' ? trebleClef(T) : bassClef(T);
+
+    // ledger lines
+    const ledger = st => `<line x1="${nx - 9}" x2="${nx + 9}" y1="${yOf(st)}" y2="${yOf(st)}" stroke="currentColor" stroke-width="1.2"/>`;
+    for (let st = bottomStep - 2; st >= step; st -= 2) g += ledger(st);
+    for (let st = topStep + 2; st <= step; st += 2) g += ledger(st);
+
+    // sharp
+    if (info.sharp) {
+      const sx = nx - 15;
+      g += `<g stroke="currentColor" stroke-linecap="butt">
+        <line x1="${sx - 1.6}" x2="${sx - 1.6}" y1="${ny - 8}" y2="${ny + 9}" stroke-width="1.1"/>
+        <line x1="${sx + 1.6}" x2="${sx + 1.6}" y1="${ny - 9}" y2="${ny + 8}" stroke-width="1.1"/>
+        <line x1="${sx - 4}" x2="${sx + 4}" y1="${ny - 1.6}" y2="${ny - 3.6}" stroke-width="2.3"/>
+        <line x1="${sx - 4}" x2="${sx + 4}" y1="${ny + 3.6}" y2="${ny + 1.6}" stroke-width="2.3"/>
+      </g>`;
+    }
+
+    // notehead
+    g += `<ellipse cx="${nx}" cy="${ny}" rx="4.9" ry="3.5" transform="rotate(-22 ${nx} ${ny})" fill="currentColor"/>`;
+
+    // cents deviation
+    const ct = centsText(info.cents);
+    if (ct) g += `<text x="${nx + 10}" y="${ny + 4}" font-family="Atkinson Hyperlegible, system-ui, sans-serif" font-size="11.5" font-weight="700"
+      fill="currentColor" stroke="var(--card)" stroke-width="3.5" paint-order="stroke">${ct}</text>`;
+
+    // octave transposition marks
+    if (shift !== 0) {
+      const lbl = { 1: '8va', 2: '15ma', '-1': '8vb', '-2': '15mb' }[shift] || '';
+      const ty = shift > 0 ? T - 16 : T + 50;
+      g += `<text x="6" y="${ty}" font-family="Newsreader, Georgia, serif" font-style="italic" font-size="12" fill="currentColor">${lbl}</text>`;
+    }
+
+    const ariaNote = `${info.name.replace('♯', ' sharp ')}${ct ? ', ' + ct + ' cents' : ''}${shift ? ', written with octave transposition' : ''}`;
+    return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${ariaNote}">${g}</svg>`;
+  }
+
+  // ---------- Rendering ----------
+  function render() {
+    rowsEl.innerHTML = '';
+    if (!ratios.length) {
+      rowsEl.innerHTML = '<div class="empty">Enter generators above and press Submit.</div>';
+      return;
+    }
+    const frag = document.createDocumentFragment();
+    for (const r of ratios) {
+      const row = document.createElement('div');
+      row.className = 'row';
+      row.dataset.key = r.key;
+
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'tone';
+      btn.setAttribute('aria-pressed', voices.has(r.key) ? 'true' : 'false');
+      btn.innerHTML = `<span class="ratio">${ratioLabel(r)}</span><span class="factors">${factorLabel(r)}</span>`;
+      btn.addEventListener('click', () => toggleTone(r, btn));
+
+      const staff = document.createElement('div');
+      staff.className = 'staff';
+      const hz = document.createElement('div');
+      hz.className = 'hz';
+
+      row.append(btn, staff, hz);
+      frag.appendChild(row);
+    }
+    rowsEl.appendChild(frag);
+    updatePitches();
+  }
+
+  function updatePitches() {
+    for (const row of rowsEl.querySelectorAll('.row')) {
+      const r = ratios.find(x => x.key === row.dataset.key);
+      const f = refHz * r.value;
+      const info = noteInfo(f);
+      row.querySelector('.staff').innerHTML = staffSVG(info);
+      const ct = centsText(info.cents);
+      row.querySelector('.hz').innerHTML =
+        `<span class="val">${trimNum(f, 2)}<small>Hz</small></span>
+         <span class="note">${info.name}${ct ? ' ' + ct + '¢' : ''}</span>`;
+    }
+  }
+
+  // ---------- Audio ----------
+  const volToGain = v => Math.pow(v / 100, 2);
+
+  function ensureAudio() {
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const comp = audioCtx.createDynamicsCompressor();
+      comp.threshold.value = -12; comp.ratio.value = 6;
+      master = audioCtx.createGain();
+      master.gain.value = volToGain(+volume.value);
+      master.connect(comp); comp.connect(audioCtx.destination);
+    }
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+  }
+
+  function startVoice(key, freq) {
+    ensureAudio();
+    const now = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(0.22, now + 0.04);
+    osc.connect(gain); gain.connect(master);
+    osc.start(now);
+    voices.set(key, { osc, gain });
+  }
+
+  function stopVoice(key) {
+    const v = voices.get(key);
+    if (!v) return;
+    const now = audioCtx.currentTime;
+    v.gain.gain.cancelScheduledValues(now);
+    v.gain.gain.setValueAtTime(v.gain.gain.value, now);
+    v.gain.gain.linearRampToValueAtTime(0, now + 0.08);
+    v.osc.stop(now + 0.1);
+    voices.delete(key);
+  }
+
+  function toggleTone(r, btn) {
+    if (voices.has(r.key)) {
+      stopVoice(r.key);
+      btn.setAttribute('aria-pressed', 'false');
+    } else {
+      startVoice(r.key, refHz * r.value);
+      btn.setAttribute('aria-pressed', 'true');
+    }
+    updateCount();
+  }
+
+  function stopAll() {
+    for (const key of [...voices.keys()]) stopVoice(key);
+    rowsEl.querySelectorAll('.tone').forEach(b => b.setAttribute('aria-pressed', 'false'));
+    updateCount();
+  }
+
+  function retune() {
+    if (!audioCtx) return;
+    const now = audioCtx.currentTime;
+    for (const [key, v] of voices) {
+      const r = ratios.find(x => x.key === key);
+      if (r) v.osc.frequency.setTargetAtTime(refHz * r.value, now, 0.02);
+    }
+  }
+
+  function updateCount() {
+    $('activeCount').textContent = `${voices.size} playing`;
+  }
+
+  // ---------- Events ----------
+  function submitGenus() {
+    const res = parseGenus(genusInput.value);
+    if (res.error) { showMessage(res.error); return; }
+    if (!applyRef(false)) return;
+    clearMessage();
+    stopAll();
+    ratios = buildGenus(res.gens);
+    $('genusTitle').textContent = `Genus [${res.gens.length ? res.gens.map(([g, e]) => pow(g, e)).join(' ') : '1'}]`;
+    $('genusCount').textContent = `${ratios.length - 1} tones plus the octave`;
+    render();
+  }
+
+  function applyRef(showOk = true) {
+    const v = parseFloat(refInput.value);
+    if (!Number.isFinite(v) || v < 20 || v > 1000) {
+      showMessage('Reference Hz must be a number from 20 to 1000.');
+      return false;
+    }
+    if (showOk) clearMessage();
+    refHz = v;
+    return true;
+  }
+
+  $('submitBtn').addEventListener('click', submitGenus);
+  genusInput.addEventListener('keydown', e => { if (e.key === 'Enter') submitGenus(); });
+
+  refInput.addEventListener('input', () => {
+    const v = parseFloat(refInput.value);
+    if (Number.isFinite(v) && v >= 20 && v <= 1000) {
+      refHz = v; clearMessage(); updatePitches(); retune();
+    }
+  });
+  const commitRef = () => { if (applyRef()) { updatePitches(); retune(); } };
+  refInput.addEventListener('change', commitRef);
+  refInput.addEventListener('keydown', e => { if (e.key === 'Enter') commitRef(); });
+
+  volume.addEventListener('input', () => {
+    volOut.textContent = volume.value;
+    if (master) master.gain.setTargetAtTime(volToGain(+volume.value), audioCtx.currentTime, 0.02);
+  });
+  $('stopAll').addEventListener('click', stopAll);
+
+  submitGenus();
+})();
+</script>
+</body>
+</html>
